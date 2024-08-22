@@ -21,10 +21,19 @@ const UserSchema = new Schema({
     type: Boolean,
     required: false,
   },
+  otpSecret: {
+    type: String,
+    required: false
+  },
   mfa: {
     type: Boolean,
     required: false,
     default: 0
+  },
+  mfaType: {
+    type: String,
+    required: false,
+    enum: ["device", "sms"]
   },
   googleSignin: {
     type: Boolean,

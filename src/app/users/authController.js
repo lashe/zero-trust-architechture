@@ -1,5 +1,5 @@
 const { jsonFailed, jsonS } = require("../../utils");
-const { phoneNubmerVerification, otpVerification, passwordChange, passwordUpdate } = require("./authServices");
+const { phoneNubmerVerification, otpVerification, passwordChange, passwordUpdate, otpGenerator, validateOTP, signIn, getToken } = require("./authServices");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const config = require("../../config/jwt");
@@ -8,6 +8,17 @@ const { googleVerify, googleAuthSignIn } = require("../services/google");
 const { createNewUser, createNewUserGoogle } = require("./userServices");
 
 let controller = {
+  signUp: async (req, res) => {
+    const { email, fullName, phoneNumber, password } = req.body;
+    if (!email) return jsonFailed(res, {}, "No email Provided", 400);
+    const newUser = { email, fullName, phoneNumber, password };
+    const createUser = await createNewUser(newUser);
+    console.log({returnedData: createUser});
+    if (!createUser) return jsonFailed(res, {}, "Error Creating New User", 400);
+    if(createUser === "exists")return jsonFailed(res, {}, "An account already exists with this email", 400);
+    return jsonS(res, 201, "Successfully Created User");
+},
+
     verifyPhoneNumber: async (req, res) => {
         const { phoneNumber } = req.body;
         const verifyNumber = await phoneNubmerVerification(phoneNumber);
@@ -25,23 +36,10 @@ let controller = {
     signin: async (req, res) => {
       try {
         const { email, password } = req.body;
-        const isUser = await User.findOne({ email: email.toLowerCase() }).select(
-          "+password"
-        );
-        if(!isUser){
-            return jsonFailed(res, {}, "Invalid Credentials", 400);
-        }
-        // compare hashed password against password from request body;
-        let passwordIsValid = bcrypt.compareSync(
-            password,
-            isUser.password
-          );
-          if (!passwordIsValid){
-            return jsonFailed(res, {}, "Invalid Credentials", 400);
-          }
-          req.session.user = isUser;
-          const data = controller.getToken(isUser);
-        return jsonS(res, 200, "Successful", data);
+        const login = await signIn(email, password);
+        if(!login) return jsonFailed(res, {}, "Invalid Credentials", 400);
+          req.session.user = login.isUser;
+        return jsonS(res, 200, "Successful", login.data);
       } catch (error) {
         console.error(error)
       }
@@ -53,25 +51,6 @@ let controller = {
       res.redirect(googleSignin.authUrl);
     },
 
-    // googleSignUp: async (req, res) => {
-    //   const { code } = req.body;
-    //   const verifyIdtoken = await googleVerify(code);
-    //   if (verifyIdtoken) {
-    //     // save user details to database
-    //     return jsonS(res, 200, "success", verifyIdtoken, {});
-    //   }
-    //   return jsonFailed(res, null, "error verifying google account", 400);
-    // },
-  
-    // googleLogin: async (req, res) => {
-    //   const { code } = req.body;
-    //   const verifyIdtoken = await verify(code);
-    //   if (verifyIdtoken) {
-    //     return jsonS(res, 200, "success", verifyIdtoken, {});
-    //   }
-    //   return jsonFailed(res, null, "error verifying google account", 400);
-    // },
-
     googleRedirect: async (req, res) => {
       const { authuser, code, hd, prompt, scope, state} = req.query;
       // console.log(req.query);
@@ -81,10 +60,9 @@ let controller = {
         console.log("google", verifyIdtoken);
         const newUser = await createNewUserGoogle(verifyIdtoken);
         if(!newUser) return jsonFailed(res, {}, "Error: User cannot be added", 404);
-        if(newUser === "exists") jsonFailed(res, {}, "User Already Exists, try loggin in", 400);
-        // req.session.user = isUser;
-        //   const data = controller.getToken(isUser);
-        return jsonS(res, 200, "success", newUser, {});
+        req.session.user = newUser;
+          const data = getToken(newUser);
+        return jsonS(res, 200, "success", data, {});
       }
       return jsonFailed(res, null, "error verifying google account", 400);
       }
@@ -92,24 +70,21 @@ let controller = {
       return jsonFailed(res, null, "error verifying google account: unverrified attempt", 400);
     },
 
-    // get authentication json web token
-    getToken: (user) => {
-        let token = jwt.sign(
-          { id: user._id, email: user.email },
-          config.jwt_secret,
-          {
-            expiresIn: 2630000, // expires in 1 month
-          }
-        );
-        let refreshToken = jwt.sign({ id: user._id, email: user.email }, config.jwt_secret);
-        let data = {
-        token: token,
-        refreshToken: refreshToken,
-        token_type: "jwt",
-        expiresIn: 2630000,
-      };
-      return data;
-      },
+    generateAuthenticator: async (req, res) => {
+      const { id } = req.user;
+      const generateOTP = await otpGenerator(id);
+      if(!generateOTP) return jsonFailed(res, {}, "Error: Auth Generator failed", 400);
+      // write('<img src="' + generateOTP.qrCode + '">');
+      return jsonS(res, 200, "success", generateOTP);
+    },
+
+    validateOtp: async (req, res) => {
+      const { id } = req.user;
+      const { otp } = req.body;
+      const otpValidated = await validateOTP(id, otp);
+      if(!otpValidated) return jsonFailed(res, {}, "Error: Unable to validate otp", 403);
+      return jsonS(res, 200, "success", otpValidated);
+    },
 
       changePassword: async (req, res) =>{
         const { id } = req.user;
