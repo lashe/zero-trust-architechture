@@ -28,8 +28,9 @@ const createNewUserGoogle = async (userData) =>{
     const { email, name } = userData;
     const userExists = await User.findOne({ email: email.toLowerCase() });
     if(userExists){
-        return "exists";
+        return userExists;
     }
+    if (userExists.lockUntil && userExists.lockUntil > Date.now()) return "locked";
     const addUser = await User.create({
         _id: uuidv4(),
         email: email.toLowerCase(), 

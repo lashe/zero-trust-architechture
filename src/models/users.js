@@ -23,7 +23,8 @@ const UserSchema = new Schema({
   },
   otpSecret: {
     type: String,
-    required: false
+    required: false,
+    select: false
   },
   mfa: {
     type: Boolean,
@@ -48,7 +49,7 @@ const UserSchema = new Schema({
   isActive: {
     type: Boolean,
     required: false,
-    default: 0
+    default: 1
   },
   isDeleted: {
     type: Boolean,
@@ -69,6 +70,14 @@ const UserSchema = new Schema({
     type: String,
     required: false,
     select: false
+  },
+  failedLoginAttempts: {
+    type: Number,
+    required: false,
+    default: 0
+  },
+  lockUntil: { 
+    type: Date 
   }
 },
 {

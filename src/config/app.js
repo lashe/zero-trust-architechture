@@ -17,5 +17,11 @@ module.exports = {
     ACCOUNT_SID: process.env.ACCOUNT_SID,
     AUTH_TOKEN: process.env.AUTH_TOKEN,
     VERIFY_SERVICE_SID: process.env.VERIFY_SERVICE_SID
-  }
+  },
+  MAILER: {
+    USERNAME: process.env.MAILER_USERNAME,
+    PASSWORD: process.env.MAILER_PASS,
+    HOST: process.env.MAILER_HOST
+  },
+  USER_SERVICE_URL: process.env.USER_SERVICE_URL
 };

@@ -5,9 +5,10 @@ const serviceSid = TWILIO.VERIFY_SERVICE_SID;
 const twilio = require("twilio")(accountSid, authToken);
 
 const getOtp = (phone_number)=>{
-  twilio.verify.v2.services(serviceSid)
+  const sendOtp = twilio.verify.v2.services(serviceSid)
     .verifications
     .create({ to: phone_number, channel: "sms" });
+    console.log(sendOtp);
 };
 
 const verifyOtp = async (phone_number, otp)=>{
