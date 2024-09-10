@@ -36,6 +36,7 @@ let controller = {
 
   // log in
   signin: async (req, res) => {
+    console.log({request: req});
       try {
         const { email, password } = req.body;
         const login = await signIn(email, password);
@@ -103,6 +104,7 @@ let controller = {
       return jsonS(res, 200, "success", otpValidated);
   },
 
+  // change password while logged in
   changePassword: async (req, res) =>{
         const { id } = req.user;
         const { oldPassword, newPassword } = req.body;
@@ -111,6 +113,7 @@ let controller = {
         if(!changeUserPassword) return jsonFailed(res, {}, "Password does not match", 400);
   },
 
+  // change password without logging in
   updatePassword: async (req, res) =>{
         const { id } = req.user;
         const { newPassword } = req.body;
@@ -118,7 +121,7 @@ let controller = {
         if(updateUserPassword) return jsonS(res, 200, "Password Updated Susseccfully"); 
         if(!updateUserPassword) return jsonFailed(res, {}, "Password does not match", 400);
   },
-
+// logout
   logout: (req, res) => {
     if (req.session) {
       allServicesLogout(req.headers["access-token"]);

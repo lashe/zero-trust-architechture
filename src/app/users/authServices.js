@@ -193,6 +193,24 @@ const getToken = (user) => {
   return data;
   };
 
+  // generate JWT token after authorisatioon has been validated
+const getTempToken = (user) => {
+  let token = jwt.sign(
+    { id: user._id, email: user.email, mfa: user.mfa, mf },
+    config.jwt_secret,
+    {
+      expiresIn: 900000, // expires in 15 minutes
+    }
+    // { algorithm: 'RS256' }
+  );
+  let data = {
+  token: token,
+  token_type: "jwt",
+  expiresIn: 900000,
+};
+return data;
+};
+
 
 module.exports = {
     phoneNubmerVerification,
@@ -204,5 +222,6 @@ module.exports = {
     validateOTP,
     unvalidateOTP,
     signIn,
-    refreshToken
+    refreshToken,
+    getTempToken
 }

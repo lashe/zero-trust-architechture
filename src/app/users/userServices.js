@@ -1,6 +1,8 @@
 const bcrypt = require("bcryptjs");
 const { v4: uuidv4 } = require("uuid");
 const { User } = require("../../models/users");
+const { Permission } = require("../../models/permission");
+const Logger = require("../../utils/logger");
 
 const createNewUser = async (userData) =>{
     const { email, fullName, password } = userData;
@@ -18,6 +20,12 @@ const createNewUser = async (userData) =>{
         isVerified: 1
     })
     if(!addUser){
+        Logger.error(`Error adding user: ${email}`);
+        return null;
+    }
+    const addPermission = await createNewUser(addUser.id);
+    if (!addPermission) {
+        Logger.error(`Error adding permission for user: ${addUser.id}`);
         return null;
     }
     return addUser;
@@ -45,8 +53,23 @@ const createNewUserGoogle = async (userData) =>{
 
 };
 
+const createNewUserPermission = async (userId) =>{
+    const userExists = await User.findOne({ _id: userId });
+    if(!userExists) return "exists";
+    const addUserPermmission = await Permission.create({
+        _id: uuidv4(),
+        userId: userId
+    })
+    if(!addUserPermmission){
+        return false;
+    }
+    return true;
+
+};
+
 
 module.exports = {
     createNewUser,
-    createNewUserGoogle
+    createNewUserGoogle,
+    createNewUserPermission
 }
