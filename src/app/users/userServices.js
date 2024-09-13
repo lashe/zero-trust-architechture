@@ -3,6 +3,8 @@ const { v4: uuidv4 } = require("uuid");
 const { User } = require("../../models/users");
 const { Permission } = require("../../models/permission");
 const Logger = require("../../utils/logger");
+const { addActivity } = require("../services/activity");
+const { sendLoginNotification } = require("../services/mailer");
 
 const createNewUser = async (userData) =>{
     const { email, fullName, password } = userData;
@@ -36,19 +38,23 @@ const createNewUserGoogle = async (userData) =>{
     const { email, name } = userData;
     const userExists = await User.findOne({ email: email.toLowerCase() });
     if(userExists){
+        if (userExists.lockUntil && userExists.lockUntil > Date.now()) return "locked";
+        await addActivity(userExists.id, "logged in");
+        await sendLoginNotification(email);
         return userExists;
     }
-    if (userExists.lockUntil && userExists.lockUntil > Date.now()) return "locked";
     const addUser = await User.create({
         _id: uuidv4(),
         email: email.toLowerCase(), 
         fullName: name,  
         googleSignin: 1,
         isVerified: 1
-    })
+    });
     if(!addUser){
         return null;
     }
+    await addActivity(userExists.id, "logged in");
+    await sendLoginNotification(email);
     return addUser;
 
 };

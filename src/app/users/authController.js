@@ -1,5 +1,5 @@
 const { jsonFailed, jsonS } = require("../../utils");
-const { phoneNubmerVerification, otpVerification, passwordChange, passwordUpdate, otpGenerator, validateOTP, signIn, getToken, unvalidateOTP } = require("./authServices");
+const { phoneNubmerVerification, otpVerification, passwordChange, passwordUpdate, otpGenerator, validateOTP, signIn, getToken, unvalidateOTP, getTempToken, getSmsOtp } = require("./authServices");
 const { googleVerify, googleAuthSignIn } = require("../services/google");
 const { createNewUser, createNewUserGoogle } = require("./userServices");
 const { allServicesLogout } = require("../services/logout");
@@ -20,19 +20,31 @@ let controller = {
 
   // verify a user's phone number
   verifyPhoneNumber: async (req, res) => {
+        const { id } = req.user;
         const { phoneNumber } = req.body;
-        const verifyNumber = await phoneNubmerVerification(phoneNumber);
+        const verifyNumber = await phoneNubmerVerification(id, phoneNumber);
         if(!verifyNumber) return jsonFailed(res, {}, "Error Verifying Phone Number", 400);
+        if(verifyNumber === "exists") return jsonFailed(res, {}, "Error: Phone Number belongs to Another Account", 400);
         return jsonS(res, 200, "Verification successfully sent");
   },
 
   // verify sms OTP with a valid phone number
   verifyOTP: async (req, res) => {
-        const { phoneNumber, otp } = req.body;
-        const verifyOtp = await otpVerification(phoneNumber, otp);
+        const { id } = req.user;
+        const { otp } = req.body;
+        const verifyOtp = await otpVerification(id, otp);
         if(!verifyOtp) return jsonFailed(res, {}, "Error Verifying OTP", 400);
-        return jsonS(res, 200, "Phone Number Susseccfully Verified");
+        req.session.user = verifyOtp.isUser;
+        return jsonS(res, 200, "Phone Number Susseccfully Verified", verifyOtp.data);
   },
+
+  // generate sms otp
+  generateSmsOtp: async (req, res) => {
+    const { id } = req.user;
+    const otpValidated = await getSmsOtp(id);
+    if(!otpValidated) return jsonFailed(res, {}, "Error: Unable to validate otp", 403);
+    return jsonS(res, 200, "success");
+},
 
   // log in
   signin: async (req, res) => {
@@ -54,6 +66,7 @@ let controller = {
       const googleSignin = await googleAuthSignIn();
       req.session.state = googleSignin.state;
       res.redirect(googleSignin.authUrl);
+      console.log(googleSignin.authUrl);
   },
 
   // callback function for a redirect from Google
@@ -62,12 +75,12 @@ let controller = {
       if (req.session.state === state) {
         const verifyIdtoken = await googleVerify(code);
       if (verifyIdtoken) {
-        console.log("google", verifyIdtoken);
         const newUser = await createNewUserGoogle(verifyIdtoken);
         if(!newUser) return jsonFailed(res, {}, "Error: User cannot be added", 404);
         if(newUser === "locked") return jsonFailed(res, {}, "This account is locked, try again later", 404);
         req.session.user = newUser;
-          const data = getToken(newUser);
+          // const data = getToken(newUser);
+          const data = getTempToken(newUser);
         return jsonS(res, 200, "success", data, {});
       }
       return jsonFailed(res, null, "error verifying google account", 400);
@@ -101,7 +114,8 @@ let controller = {
       const { otp } = req.body;
       const otpValidated = await validateOTP(id, otp);
       if(!otpValidated) return jsonFailed(res, {}, "Error: Unable to validate otp", 403);
-      return jsonS(res, 200, "success", otpValidated);
+      req.session.user = otpValidated.isUser;
+      return jsonS(res, 200, "success", otpValidated.data);
   },
 
   // change password while logged in
@@ -128,6 +142,7 @@ let controller = {
       req.session.user = null;
       return jsonS(res, 200, "logged out successfully");
     }
+    allServicesLogout(req.headers["access-token"]);
     return jsonS(res, 200, "logged out successfully");
   },
 }

@@ -9,8 +9,9 @@ router.get("/", authController.FirstRoute);
 
 router.post("/signup", AuthController.signUp);
 router.post("/signin", AuthController.signin);
-router.post("/verify/phone-number", AuthController.verifyPhoneNumber);
-router.post("/verify/otp", AuthController.verifyOTP);
+router.post("/verify/phone-number", auth, AuthController.verifyPhoneNumber);
+router.get("/sms/otp", auth, AuthController.generateSmsOtp);
+router.post("/verify/otp", auth, AuthController.verifyOTP);
 router.get("/google", AuthController.googleAuth);
 router.get("/callback", AuthController.googleRedirect);
 router.get("/authenticator/generate", auth, AuthController.generateAuthenticator);

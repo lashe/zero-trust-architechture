@@ -7,6 +7,7 @@ const { generateOtp, verifyOTP } = require("../services/2factorauth");
 var QRCode = require('qrcode');
 const { addActivity } = require("../services/activity");
 const { sendLoginNotification, sendLoginAttemptNotification } = require("../services/mailer");
+const Logger = require("../../utils/logger");
 
 const signIn = async (email, password) => {
     const MAX_FAILED_ATTEMPTS = 5;
@@ -44,7 +45,7 @@ const signIn = async (email, password) => {
         await isUser.save();
         await addActivity(isUser.id, "logged in");
         await sendLoginNotification(isUser.email);
-        const data = getToken(isUser);
+        const data = getTempToken(isUser);
         let response = {
             isUser,
             data
@@ -52,34 +53,63 @@ const signIn = async (email, password) => {
         return response;
 }
 
-const phoneNubmerVerification = async (phoneNumber) => {
+const phoneNubmerVerification = async (id, phoneNumber) => {
     try {
         const isUser = await User.findOne({ phoneNumber: phoneNumber });
-        if(!isUser) return false;
-        if(isUser.mfaType && !isUser.mfaType == "sms") return false;
+        if(isUser && !isUser.id !== id) return "exists";
+        await User.updateOne({ _id: isUser.id }, {
+          $set:{
+            phoneNumber: phoneNumber
+          }
+        });
         getOtp(phoneNumber);
         return true;
     } catch (error) {
-        console.error(error);
-        return false;
+        Logger.error(error);
+        return null;
     }
 };
 
-const otpVerification = async (phoneNumber, otp) => {
-    const isUser = await User.findOne({ phoneNumber: phoneNumber });
+const getSmsOtp = async (id) => {
+  try {
+      const isUser = await User.findOne({ _id: id });
+      if(isUser.mfaType && !isUser.mfaType == "sms") return false;
+      if(!isUser.phoneNumber) return false;
+      getOtp(isUser.phoneNumber);
+      return true;
+  } catch (error) {
+      Logger.error(error);
+      return null;
+  }
+};
+
+const otpVerification = async (id, otp) => {
+    const isUser = await User.findOne({ _id: id });
     if(!isUser) return false;
     if(isUser.mfaType && !isUser.mfaType == "sms") return false;
-    const verifyotpp = await verifyOtp(phoneNumber, otp);
+    if(!isUser.phoneNumber) return false;
+    const verifyotpp = await verifyOtp(isUser.phoneNumber, otp);
     if (verifyotpp.status === "approved") {
-      if(isUser.mfaType && isUser.mfaType == "sms") return true;
-      await User.updateOne({ _id: isUser.id }, {
+      const data = getToken(isUser);
+      if(isUser.mfaType && isUser.mfaType == "sms") {
+        let response = {
+          isUser,
+          data
+      };
+      return response;
+      }
+      const updatedUser = await User.updateOne({ _id: isUser.id }, {
         $set:{
           mfa: 1, mfaType: "sms"
         }
       });
-      return true;
+      let response = {
+        updatedUser,
+        data
+    };
+    return response;
     }
-    console.error(verifyotpp.status);
+    Logger.error(verifyotpp.status);
     return false;
 };
 
@@ -119,9 +149,18 @@ const validateOTP = async (userId, otp) => {
         await User.updateOne({_id: userId}, { $set:{ mfa: 1, mfaType: "device" }});
         const updatedUser = await User.findOne({ _id: userId });
         data = getToken(updatedUser);
+        let response = {
+          updatedUser,
+          data
+      };
+      return response;
     }
     data = getToken(user);
-    return data;
+    let response = {
+      user,
+      data
+  };
+  return response;
 };
 
 // deregister a MFA authenticator app
@@ -196,7 +235,7 @@ const getToken = (user) => {
   // generate JWT token after authorisatioon has been validated
 const getTempToken = (user) => {
   let token = jwt.sign(
-    { id: user._id, email: user.email, mfa: user.mfa, mf },
+    { id: user._id, email: user.email, mfa: user.mfa },
     config.jwt_secret,
     {
       expiresIn: 900000, // expires in 15 minutes
@@ -223,5 +262,6 @@ module.exports = {
     unvalidateOTP,
     signIn,
     refreshToken,
-    getTempToken
+    getTempToken,
+    getSmsOtp
 }
